@@ -77,6 +77,17 @@ final class ManiphestTaskSearchEngine
     }
     $saved->setParameter('ids', $ids);
 
+    $dependent_ids = $request->getStrList('dependentIds');
+    foreach ($dependent_ids as $key => $id) {
+      $id = trim($id, ' Tt');
+      if (!$id || !is_numeric($id)) {
+        unset($ids[$key]);
+      } else {
+        $dependent_ids[$key] = $id;
+      }
+    }
+    $saved->setParameter('dependentIds', $dependent_ids);
+
     $saved->setParameter('fulltext', $request->getStr('fulltext'));
 
     $saved->setParameter(
@@ -166,6 +177,11 @@ final class ManiphestTaskSearchEngine
     $ids = $saved->getParameter('ids');
     if ($ids) {
       $query->withIDs($ids);
+    }
+
+    $dependent_ids = $saved->getParameter('dependentIds');
+    if ($dependent_ids) {
+      $query->withDependentIDs($dependent_ids);
     }
 
     $fulltext = $saved->getParameter('fulltext');
@@ -301,6 +317,7 @@ final class ManiphestTaskSearchEngine
     }
 
     $ids = $saved->getParameter('ids', array());
+    $dependent_ids = $saved->getParameter('dependentIds', array());
 
     $form
       ->appendChild(
@@ -394,7 +411,12 @@ final class ManiphestTaskSearchEngine
         id(new AphrontFormTextControl())
           ->setName('ids')
           ->setLabel(pht('Task IDs'))
-          ->setValue(implode(', ', $ids)));
+          ->setValue(implode(', ', $ids)))
+      ->appendChild(
+        id(new AphrontFormTextControl())
+          ->setName('dependentIds')
+          ->setLabel(pht('Dependent Task IDs'))
+          ->setValue(implode(', ', $dependent_ids)));
 
     $this->appendCustomFieldsToForm($form, $saved);
 

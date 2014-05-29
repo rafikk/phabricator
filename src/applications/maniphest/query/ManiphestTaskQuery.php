@@ -11,6 +11,7 @@ final class ManiphestTaskQuery
 
   private $taskIDs             = array();
   private $taskPHIDs           = array();
+  private $dependentTaskIDs    = array();
   private $authorPHIDs         = array();
   private $ownerPHIDs          = array();
   private $includeUnowned      = null;
@@ -67,6 +68,11 @@ final class ManiphestTaskQuery
 
   public function withPHIDs(array $phids) {
     $this->taskPHIDs = $phids;
+    return $this;
+  }
+
+  public function withDependentIDs(array $ids) {
+    $this->dependentTaskIDs = $ids;
     return $this;
   }
 
@@ -195,6 +201,7 @@ final class ManiphestTaskQuery
     $where = array();
     $where[] = $this->buildTaskIDsWhereClause($conn);
     $where[] = $this->buildTaskPHIDsWhereClause($conn);
+    $where[] = $this->buildDependentTaskIDsWhereClause($conn);
     $where[] = $this->buildStatusWhereClause($conn);
     $where[] = $this->buildStatusesWhereClause($conn);
     $where[] = $this->buildPrioritiesWhereClause($conn);
@@ -355,6 +362,26 @@ final class ManiphestTaskQuery
       $conn,
       'phid in (%Ls)',
       $this->taskPHIDs);
+  }
+
+  private function buildDependentTaskIDsWhereClause(
+    AphrontDatabaseConnection $conn) {
+    if (!$this->dependentTaskIDs) {
+      return null;
+    }
+
+    $dependent_tasks = id(new ManiphestTaskQuery())
+      ->setViewer($this->getViewer())
+      ->withIDs($this->dependentTaskIDs)
+      ->execute();
+
+    $dependent_task_phids = mpull($dependent_tasks, 'getPHID');
+
+    return qsprintf(
+      $conn,
+      'edge.type = %s AND edge.dst IN (%Ls)',
+      PhabricatorEdgeConfig::TYPE_TASK_DEPENDED_ON_BY_TASK,
+      $dependent_task_phids);
   }
 
   private function buildStatusWhereClause(AphrontDatabaseConnection $conn) {
@@ -645,6 +672,12 @@ final class ManiphestTaskQuery
     $project_dao = new ManiphestTaskProject();
 
     $joins = array();
+
+    if ($this->dependentTaskIDs) {
+      $joins[] = qsprintf(
+        $conn_r,
+        'JOIN edge ON edge.src = task.phid');
+    }
 
     if ($this->projectPHIDs || $this->includeNoProject) {
       $joins[] = qsprintf(
